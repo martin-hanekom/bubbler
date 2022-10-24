@@ -1,11 +1,13 @@
 #include <iostream>
 #include <cmath>
+#include <cstdlib>
+#include <time.h>
 #include <vector>
 #include <SFML/Graphics.hpp>
 
 #define WIN_W 800
 #define WIN_H 600
-#define FS 30
+#define FS 60
 
 #define HEALTH_RATIO 10
 #define P_HEALTH 100.0
@@ -16,7 +18,10 @@
 #define GUN_COOLDOWN 0.2
 #define BULLET_W 5
 #define BULLET_H 1
-#define BULLET_SPEED 400.0
+#define BULLET_SPEED 200.0
+#define BULLET_DAMAGE 10.0
+#define B_SPEED 30.0
+#define B_COOLDOWN 2.0;
 
 float vAbs(sf::Vector2f vec) {
   return sqrt(vec.x * vec.x + vec.y * vec.y);
@@ -34,7 +39,6 @@ class Player {
     sf::RectangleShape gun;
     float health = P_HEALTH;
     float radius = P_RADIUS;
-    float gunCooldown = 0;
     sf::Vector2f pos;
     sf::Color color;
 
@@ -100,9 +104,9 @@ class Bullet {
     }
 
     void update(float dt) {
+      //std::cout << BULLET_SPEED * dt << std::endl;
       pos.x += BULLET_SPEED * dt * cos(angle);
       pos.y += BULLET_SPEED * dt * sin(angle);
-      //std::cout << "pos: " << pos.x << ", " << pos.y << std::endl;
       body.setPosition(pos);
     }
 
@@ -115,17 +119,83 @@ class Bullet {
     }
 };
 
+class Bubble {
+  public:
+    sf::CircleShape body;
+    float health;
+    float radius;
+    sf::Vector2f pos;
+    sf::Color color;
+
+    Bubble(sf::Color color): color(color) {
+      health = rand() % 20 + 20.0;
+      int side = rand() % 4;
+      switch (side) {
+        case 0:
+          pos = sf::Vector2f(0, rand() % WIN_H);
+          break;
+        case 1:
+          pos = sf::Vector2f(rand() % WIN_W, 0);
+          break;
+        case 2:
+          pos = sf::Vector2f(WIN_W, rand() % WIN_H);
+          break;
+        default:
+          pos = sf::Vector2f(rand() % WIN_W, WIN_H);
+          break;
+      }
+      radius = health / 5.0 + 10.0;
+      body.setRadius(radius);
+      body.setOrigin(radius, radius);
+      body.setPosition(pos);
+      body.setFillColor(color);
+    }
+
+    void update(float dt, sf::Vector2f &playerPos, std::vector<Bullet> &bullets) {
+      sf::Vector2f dirPos = playerPos - pos;
+      if (vAbs(dirPos) < P_RADIUS) {
+        std::cout << "Kill" << std::endl;
+      }
+      float angle = vAngle(dirPos);
+      float speed = B_SPEED - health / 2;
+      pos.x += speed * dt * cos(angle);
+      pos.y += speed * dt * sin(angle);
+      body.setPosition(pos);
+      auto bullet = bullets.begin();
+      while (bullet != bullets.end()) {
+        if (vAbs(pos - bullet->pos) <= radius) {
+          bleed();
+          bullet = bullets.erase(bullet);
+        } else {
+          bullet++;
+        }
+      }
+    }
+
+    void bleed() {
+      health -= BULLET_DAMAGE;
+      radius = health / 5.0 + 15.0;
+      body.setRadius(radius);
+    }
+
+    void draw(sf::RenderWindow &window) {
+      window.draw(body);
+    }
+};
+
 int main() {
   // Create window
+  srand(time(0));
   sf::RenderWindow window(sf::VideoMode(WIN_W, WIN_H), "Bubbler", sf::Style::Titlebar | sf::Style::Close);
   window.setVerticalSyncEnabled(true);
   window.setFramerateLimit(FS);
   sf::Clock clock;
-  float cooldown = 0;
+  float cooldown = B_COOLDOWN;
 
   // Create player
   Player player(sf::Vector2f(WIN_W / 2, WIN_H / 2));
   std::vector<Bullet> bullets;
+  std::vector<Bubble> bubbles;
 
   while (window.isOpen()) {
     sf::Event event;
@@ -147,6 +217,11 @@ int main() {
 
     // update
     float dt = clock.restart().asSeconds();
+    cooldown -= dt;
+    if (cooldown <= 0) {
+      bubbles.push_back(Bubble(sf::Color::Blue));
+      cooldown = B_COOLDOWN;
+    }
     /*cooldown = (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) ? cooldown - dt : GUN_COOLDOWN;
     if (cooldown <= 0) {
       std::cout << "shoot" << std::endl;
@@ -162,12 +237,24 @@ int main() {
         bullet++;
       }
     }
+    auto bubble = bubbles.begin();
+    while (bubble != bubbles.end()) {
+      bubble->update(dt, player.pos, bullets);
+      if (bubble->health <= 0) {
+        bubble = bubbles.erase(bubble);
+      } else {
+        bubble++;
+      }
+    }
 
     // draw
     window.clear();
     player.draw(window);
     for (auto &bullet : bullets) {
       bullet.draw(window);
+    }
+    for (auto &bubble : bubbles) {
+      bubble.draw(window);
     }
     window.display();
   }
