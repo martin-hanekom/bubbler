@@ -1,7 +1,7 @@
 IDIR = ../include
 CC = g++
 CFLAGS = -I.
-LIBS = -lsfml-graphics -lsfml-window -lsfml-system -lm
+LIBS = -lsfml-graphics -lsfml-audio -lsfml-window -lsfml-system -lm
 DEPS = 
 OBJ = main.o
 
