@@ -5,24 +5,51 @@
 #include <vector>
 #include <SFML/Graphics.hpp>
 
-#define WIN_W 800
-#define WIN_H 600
+#define WIN_W 1024
+#define WIN_H 650
 #define FS 60
 
-#define HEALTH_RATIO 10
-#define P_HEALTH 100.0
-#define P_RADIUS 10.0
-#define P_SPEED 60.0
-#define P_BULLETS 100.0
+#define HEALTH_DIV 20
+#define HEALTH_OFFSET 8
+#define SPEED_DIV 2
+#define PLAYER_HEALTH 100
+#define PLAYER_SPEED 60
+#define PLAYER_BULLETS 100
 #define GUN_W 3
 #define GUN_H 15
 #define GUN_COOLDOWN 0.2
 #define BULLET_W 5
 #define BULLET_H 1
-#define BULLET_SPEED 200.0
-#define BULLET_DAMAGE 10.0
-#define B_SPEED 30.0
-#define B_COOLDOWN 2.0;
+#define BULLET_SPEED 200
+#define BULLET_DAMAGE 10
+#define BUBBLE_SPEED 30
+#define BUBBLE_COOLDOWN 2;
+
+typedef struct {
+  sf::RectangleShape body;
+  sf::Vector2f pos;
+  float angle;
+} Bullet;
+
+typedef struct {
+  sf::RectangleShape body;
+  sf::Vector2f pos;
+  int bullets;
+} Gun;
+
+typedef struct {
+  sf::CircleShape body;
+  sf::Vector2f pos;
+  int health;
+  int killed;
+} Player;
+
+typedef struct {
+  sf::CircleShape body;
+  sf::Vector2f pos;
+  int health;
+  float speed;
+} Bubble;
 
 float vAbs(sf::Vector2f vec) {
   return sqrt(vec.x * vec.x + vec.y * vec.y);
@@ -34,180 +61,171 @@ float vAngle(sf::Vector2f pos) {
   return angle * copysignf(1.0, pos.y);
 }
 
-class Bullet {
-  public:
-    sf::RectangleShape body;
-    sf::Vector2f pos;
-    sf::Color color;
-    float angle;
+float radius(int health) {
+  return health / HEALTH_DIV + HEALTH_OFFSET;
+}
 
-    Bullet(sf::Vector2f pos, sf::Vector2f mousePos): pos(pos), color(sf::Color::Yellow) {
-      body.setSize(sf::Vector2f(BULLET_W, BULLET_H));
-      body.setOrigin(BULLET_W / 2, BULLET_H / 2);
-      body.setPosition(pos);
-      sf::Vector2f dirPos = mousePos - pos;
-      angle = vAngle(dirPos);
-      body.setRotation(angle * 180.0 / M_PI);
-    }
+float speed(float maxSpeed, int health) {
+  return maxSpeed - health / SPEED_DIV;
+}
 
-    void update(float dt) {
-      //std::cout << BULLET_SPEED * dt << std::endl;
-      pos.x += BULLET_SPEED * dt * cos(angle);
-      pos.y += BULLET_SPEED * dt * sin(angle);
-      body.setPosition(pos);
-    }
+void createBullet(Bullet &bullet, sf::Vector2f gunPos, sf::Vector2f &mousePos) {
+  bullet.pos = gunPos;
+  bullet.body.setSize(sf::Vector2f(BULLET_W, BULLET_H));
+  bullet.body.setOrigin(BULLET_W / 2, BULLET_H / 2);
+  bullet.body.setPosition(bullet.pos);
+  bullet.body.setFillColor(sf::Color::Yellow);
+  sf::Vector2f dirPos = mousePos - gunPos;
+  bullet.angle = vAngle(dirPos);
+  bullet.body.setRotation(bullet.angle * 180.0 / M_PI);
+}
 
-    void draw(sf::RenderWindow &window) {
-      window.draw(body);
-    }
+void createGun(Gun &gun, Player &player) {
+  gun.body.setSize(sf::Vector2f(GUN_W, GUN_H));
+  gun.body.setOrigin(-radius(player.health), 0);
+  gun.body.setPosition(player.pos);
+  gun.body.setFillColor(sf::Color::Magenta);
+  gun.bullets = PLAYER_BULLETS;
+}
 
-    bool outOfBounds() {
-      return (pos.x < 0 || pos.x > WIN_W || pos.y < 0 || pos.y > WIN_H);
-    }
-};
+sf::Vector2f gunPosition(Player &player, Gun &gun) {
+  float angle = gun.body.getRotation() * M_PI / 180.0;
+  float r = radius(player.health);
+  return player.pos + sf::Vector2f(r * cos(angle), r * sin(angle));
+}
 
-class Player {
-  public:
-    sf::CircleShape body;
-    sf::RectangleShape gun;
-    sf::Text scoreText;
-    sf::Text bulletText;
-    float health = P_HEALTH;
-    float radius = P_RADIUS;
-    float num_bullets = P_BULLETS;
-    float num_killed = 0;
-    sf::Vector2f pos;
-    sf::Color color;
+void createPlayer(Player &player, sf::Vector2f pos) {
+  player.pos = pos;
+  player.health = PLAYER_HEALTH;
+  float r = radius(player.health);
+  player.body.setRadius(r);
+  player.body.setOrigin(r, r);
+  player.body.setPosition(player.pos);
+  player.body.setFillColor(sf::Color::Red);
+}
 
-    Player(sf::Vector2f pos, sf::Font &font): pos(pos), color(sf::Color::Red) {
-      body.setRadius(radius);
-      body.setOrigin(radius, radius);
-      body.setPosition(pos);
-      body.setFillColor(color);
+void createBubble(Bubble &bubble) {
+  bubble.health = rand() % 20 + 20.0;
+  int side = rand() % 4;
+  switch (side) {
+    case 0:
+      bubble.pos = sf::Vector2f(0, rand() % WIN_H);
+      break;
+    case 1:
+      bubble.pos = sf::Vector2f(rand() % WIN_W, 0);
+      break;
+    case 2:
+      bubble.pos = sf::Vector2f(WIN_W, rand() % WIN_H);
+      break;
+    default:
+      bubble.pos = sf::Vector2f(rand() % WIN_W, WIN_H);
+      break;
+  }
+  float r = radius(bubble.health);
+  bubble.body.setRadius(r);
+  bubble.body.setOrigin(r, r);
+  bubble.body.setPosition(bubble.pos);
+  bubble.body.setFillColor(sf::Color::Blue);
+}
 
-      gun.setSize(sf::Vector2f(GUN_W, GUN_H));
-      gun.setOrigin(-radius, 0);
-      gun.setPosition(pos);
-      gun.setFillColor(sf::Color::White);
+void mouseMove(sf::Vector2f mousePos, Player &player, Gun &gun) {
+  sf::Vector2f dirPos = mousePos - gunPosition(player, gun);
+  if (vAbs(dirPos) > 2 * radius(player.health)) {
+    gun.body.setRotation(vAngle(dirPos) * 180.0 / M_PI - 90.0);
+  }
+}
 
-      scoreText.setFont(font);
-      scoreText.setString("Score: 0");
-      scoreText.setPosition(0, 0);
-      bulletText.setFont(font);
-      bulletText.setString("Bullets: 0");
-      bulletText.setPosition(0, 30);
-    }
+void shoot(sf::Vector2f mousePos, Player &player, Gun &gun, std::vector<Bullet> &bullets) {
+  if (gun.bullets > 0) {
+    Bullet bullet;
+    createBullet(bullet, gunPosition(player, gun), mousePos);
+    bullets.push_back(bullet);
+    gun.bullets--;
+  }
+}
 
-    void update(float dt) {
-      if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
-        pos.y -= P_SPEED * dt;
-      } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
-        pos.y += P_SPEED * dt;
+float update(float dt, float cooldown, Player &player, Gun &gun, std::vector<Bubble> &bubbles, std::vector<Bullet> &bullets) {
+  // Keypress
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+    player.pos.y -= PLAYER_SPEED * dt;
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+    player.pos.y += PLAYER_SPEED * dt;
+  }
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+    player.pos.x -= PLAYER_SPEED * dt;
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+    player.pos.x += PLAYER_SPEED * dt;
+  }
+  player.body.setPosition(player.pos);
+  gun.body.setPosition(player.pos);
+
+  // Cooldown
+  //cooldown -= dt;
+  if (cooldown <= 0) {
+    Bubble bubble;
+    createBubble(bubble);
+    bubbles.push_back(bubble);
+    cooldown = BUBBLE_COOLDOWN;
+  }
+
+  // Velocity-based
+  /*auto bullet = bullets.begin();
+  while (bullet != bullets.end()) {
+    bullet->pos.x += BULLET_SPEED * dt * cos(bullet->angle);
+    bullet->pos.y += BULLET_SPEED * dt * sin(bullet->angle);
+    bool erased = false;
+    for (auto &bubble : bubbles) {
+      if (vAbs(bubble.pos - bullet->pos) <= radius(bubble.health)) {
+        bubble.health -= BULLET_DAMAGE;
+        bubble.body.setRadius(radius(bubble.health));
+        erased = true;
+        break;
       }
-      if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
-        pos.x -= P_SPEED * dt;
-      } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-        pos.x += P_SPEED * dt;
-      }
-      body.setPosition(pos);
-      gun.setPosition(pos);
     }
-
-    void mouseMove(sf::Vector2f mousePos) {
-      sf::Vector2f dirPos = mousePos - getGunPosition();
-      if (vAbs(dirPos) > 2 * radius) {
-        gun.setRotation(vAngle(dirPos) * 180.0 / M_PI - 90.0);
-      }
+    if (erased || bullet->pos.x < 0 || bullet->pos.x > WIN_W || bullet->pos.y < 0 || bullet->pos.y > WIN_H) {
+      bullet = bullets.erase(bullet);
+    } else {
+      bullet->body.setPosition(bullet->pos);
+      bullet++;
     }
-
-    void shoot(sf::Vector2f mousePos, std::vector<Bullet> bullets) {
-      if (num_bullets > 0) {
-        bullets.push_back(Bullet(getGunPosition(), mousePos));
-        num_bullets--;
-      }
-    }
-
-    void draw(sf::RenderWindow &window) {
-      window.draw(body);
-      window.draw(gun);
-      window.draw(scoreText);
-      window.draw(bulletText);
-    }
-
-    sf::Vector2f getGunPosition() {
-      float gunAngle = gun.getRotation() * M_PI / 180.0;
-      return pos + sf::Vector2f(radius * cos(gunAngle), radius * sin(gunAngle));
-    }
-};
-
-class Bubble {
-  public:
-    sf::CircleShape body;
-    float health;
-    float radius;
-    sf::Vector2f pos;
-    sf::Color color;
-
-    Bubble(sf::Color color): color(color) {
-      health = rand() % 20 + 20.0;
-      int side = rand() % 4;
-      switch (side) {
-        case 0:
-          pos = sf::Vector2f(0, rand() % WIN_H);
-          break;
-        case 1:
-          pos = sf::Vector2f(rand() % WIN_W, 0);
-          break;
-        case 2:
-          pos = sf::Vector2f(WIN_W, rand() % WIN_H);
-          break;
-        default:
-          pos = sf::Vector2f(rand() % WIN_W, WIN_H);
-          break;
-      }
-      radius = health / 5.0 + 10.0;
-      body.setRadius(radius);
-      body.setOrigin(radius, radius);
-      body.setPosition(pos);
-      body.setFillColor(color);
-    }
-
-    bool update(float dt, Player &player, std::vector<Bullet> &bullets) {
-      sf::Vector2f dirPos = player.pos - pos;
-      if (vAbs(dirPos) < P_RADIUS) {
-        std::cout << "Game over" << std::endl;
-        return true;
-      }
+  }*/
+  auto bubble = bubbles.begin();
+  while (bubble != bubbles.end()) {
+    if (bubble->health <= 0) {
+      bubble = bubbles.erase(bubble);
+    } else {
+      sf::Vector2f dirPos = player.pos - bubble->pos;
       float angle = vAngle(dirPos);
-      float speed = B_SPEED - health / 2;
-      pos.x += speed * dt * cos(angle);
-      pos.y += speed * dt * sin(angle);
-      body.setPosition(pos);
-      auto bullet = bullets.begin();
-      while (bullet != bullets.end()) {
-        if (vAbs(pos - bullet->pos) <= radius) {
-          bleed();
-          bullet = bullets.erase(bullet);
-        } else {
-          bullet++;
-        }
+      float s = speed(BUBBLE_SPEED, bubble->health);
+      std::cout << s << std::endl;
+      bubble->pos.x = s * dt * cos(angle);
+      bubble->pos.y = s * dt * sin(angle);
+      if (vAbs(player.pos - bubble->pos) < radius(player.health)) {
+        std::cout << "Game over" << std::endl;
+        return -1;
       }
-      return false;
+      bubble->body.setPosition(bubble->pos);
+      bubble++;
     }
+  }
 
-    void bleed() {
-      health -= BULLET_DAMAGE;
-      radius = health / 5.0 + 15.0;
-      body.setRadius(radius);
-    }
+  return cooldown;
+}
 
-    void draw(sf::RenderWindow &window) {
-      window.draw(body);
-    }
-};
+void draw(sf::RenderWindow &window, Player &player, Gun &gun, std::vector<Bubble> &bubbles, std::vector<Bullet> &bullets) {
+  window.clear();
+  for (auto &bubble : bubbles) {
+    window.draw(bubble.body);
+  }
+  window.draw(player.body);
+  window.draw(gun.body);
+  for (auto &bullet : bullets) {
+    window.draw(bullet.body);
+  }
+  window.display();
+}
 
 int main() {
-  // Create window
   srand(time(0));
   sf::RenderWindow window(sf::VideoMode(WIN_W, WIN_H), "Bubbler", sf::Style::Titlebar | sf::Style::Close);
   window.setVerticalSyncEnabled(true);
@@ -216,13 +234,17 @@ int main() {
   sf::Font font;
   if (!font.loadFromFile("lib/arial.ttf")) {
     std::cout << "Loading font error!" << std::endl;
+    return 1;
   }
-  float cooldown = B_COOLDOWN;
+  float cooldown = 0;//BUBBLE_COOLDOWN;
 
-  // Create player
-  Player player(sf::Vector2f(WIN_W / 2, WIN_H / 2), font);
+  // Create objects
+  Player player;
+  Gun gun;
   std::vector<Bullet> bullets;
   std::vector<Bubble> bubbles;
+  createPlayer(player, {WIN_W / 2, WIN_H / 2});
+  createGun(gun, player);
 
   while (window.isOpen()) {
     sf::Event event;
@@ -232,61 +254,22 @@ int main() {
           window.close();
           break;
         case sf::Event::MouseMoved:
-          player.mouseMove(sf::Vector2f(event.mouseMove.x, event.mouseMove.y));
+          mouseMove(sf::Vector2f(sf::Mouse::getPosition(window)), player, gun);
           break;
         case sf::Event::MouseButtonPressed:
-          player.shoot(sf::Vector2f(sf::Mouse::getPosition(window)), bullets);
+          shoot(sf::Vector2f(sf::Mouse::getPosition(window)), player, gun, bullets);
           break;
         default:
           break;
       }
     }
 
-    // update
-    float dt = clock.restart().asSeconds();
-    cooldown -= dt;
-    if (cooldown <= 0) {
-      bubbles.push_back(Bubble(sf::Color::Blue));
-      cooldown = B_COOLDOWN;
+    cooldown = update(clock.restart().asSeconds(), cooldown, player, gun, bubbles, bullets);
+    if (cooldown < 0) {
+      window.close();
     }
-    /*cooldown = (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) ? cooldown - dt : GUN_COOLDOWN;
-    if (cooldown <= 0) {
-      std::cout << "shoot" << std::endl;
-      bullets.push_back(Bullet(player.getGunPosition(), sf::Vector2f(sf::Mouse::getPosition(window))));
-    }*/
-    player.update(dt);
-    auto bullet = bullets.begin();
-    while (bullet != bullets.end()) {
-      bullet->update(dt);
-      if (bullet->outOfBounds()) {
-        bullet = bullets.erase(bullet);
-      } else {
-        bullet++;
-      }
-    }
-    auto bubble = bubbles.begin();
-    while (bubble != bubbles.end()) {
-      if (bubble->update(dt, player, bullets)) {
-        window.close();
-      }
-      if (bubble->health <= 0) {
-        bubble = bubbles.erase(bubble);
-        player.num_killed++;
-      } else {
-        bubble++;
-      }
-    }
-
-    // draw
-    window.clear();
-    player.draw(window);
-    for (auto &bullet : bullets) {
-      bullet.draw(window);
-    }
-    for (auto &bubble : bubbles) {
-      bubble.draw(window);
-    }
-    window.display();
+    draw(window, player, gun, bubbles, bullets);
   }
+  
   return 0;
 }
