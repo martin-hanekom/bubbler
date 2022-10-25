@@ -22,7 +22,7 @@
 #define GUN_COOLDOWN 0.2
 #define BULLET_W 5
 #define BULLET_H 1
-#define BULLET_SPEED 300
+#define BULLET_SPEED 250
 #define BULLET_ALT 5
 #define BULLET_DAMAGE 10
 #define AMMO_COST 15
@@ -31,6 +31,7 @@
 #define BUBBLE_COOLDOWN 2
 #define BUBBLE_DAMAGE 20
 #define BUBBLE_ATTACK 1
+#define PACKAGE_RADIUS 10
 
 #define ST_INIT 0
 #define ST_PLAY 1
@@ -88,15 +89,17 @@ typedef struct {
   sf::CircleShape body;
   sf::Vector2f pos;
   int health;
+  float alpha;
 } Package;
 
 // global variables
 int gameState = ST_INIT;
+int PACKAGE_COLOR[] = {0, 255, 0};
 Player player;
 Gun gun;
 std::vector<Bullet> bullets;
 std::vector<Bubble> bubbles;
-std::vector<Package> package;
+std::vector<Package> packages;
 sf::Text textBoxes[NUM_TX] = {sf::Text(), sf::Text(), sf::Text(), sf::Text()};
 sf::Font font;
 std::string soundFiles[NUM_SOUNDS] = {"lib/pop.wav", "lib/reload.wav", "lib/ow.wav", "lib/shot.wav", "lib/empty.wav"};
@@ -189,6 +192,16 @@ void createBubble(Bubble &bubble) {
   bubble.body.setFillColor(sf::Color::Blue);
 }
 
+void createPackage(Package &package, sf::Vector2f pos) {
+  package.pos = pos;
+  package.health = rand() % 3 * 10;
+  package.alpha = 255;
+  package.body.setRadius(PACKAGE_RADIUS);
+  package.body.setOrigin(PACKAGE_RADIUS, PACKAGE_RADIUS);
+  package.body.setPosition(pos);
+  package.body.setFillColor(sf::Color(PACKAGE_COLOR[0], PACKAGE_COLOR[1], PACKAGE_COLOR[2]));
+}
+
 // input methods
 void mouseMove(sf::Vector2f mousePos) {
   sf::Vector2f dirPos = mousePos - gunPosition();
@@ -242,6 +255,24 @@ int update(sf::RenderWindow &window, float dt) {
   player.body.setPosition(player.pos);
   gun.body.setPosition(player.pos);
 
+  auto package = packages.begin();
+  float playerRadius = radius(player.health);
+  bool setUi = false;
+  while (package != packages.end()) {
+    package->alpha -= dt * 25;
+    package->body.setFillColor(sf::Color(PACKAGE_COLOR[0], PACKAGE_COLOR[1], PACKAGE_COLOR[2], ceil(package->alpha)));
+    if (vAbs(player.pos - package->pos) <= playerRadius) {
+      player.health += package->health;
+      resizePlayer();
+      package = packages.erase(package);
+      setUi = true;
+    } else if (package->alpha <= 0) {
+      package = packages.erase(package);
+    } else {
+      package++;
+    }
+  }
+
   // Cooldown
   cooldown[CD_BUBBLE] -= dt;
   if (cooldown[CD_BUBBLE] <= 0) {
@@ -274,11 +305,16 @@ int update(sf::RenderWindow &window, float dt) {
       bullet++;
     }
   }
-  bool setUi = false;
+
   auto bubble = bubbles.begin();
   while (bubble != bubbles.end()) {
     if (bubble->health <= 0) {
       player.cash += ceil(bubble->origHealth / 10.0);
+      if (rand() % 20 == 4) {
+        Package package;
+        createPackage(package, bubble->pos);
+        packages.push_back(package);
+      }
       player.killed++;
       bubble = bubbles.erase(bubble);
       setUi = true;
@@ -321,6 +357,9 @@ void draw(sf::RenderWindow &window) {
   for (auto &bullet : bullets) {
     window.draw(bullet.body);
   }
+  for (auto &package : packages) {
+    window.draw(package.body);
+  }
   for (int i = 0; i < NUM_TX - 1; i++) {
     window.draw(textBoxes[i]);
   }
@@ -344,6 +383,7 @@ void restart() {
 
   bullets.clear();
   bubbles.clear();
+  packages.clear();
 
   for (int i = 0; i < NUM_TX; i++) {
     textBoxes[i].setFont(font);
