@@ -26,6 +26,12 @@
 #define AMMO_COST 15
 #define AMMO_AMOUNT 30
 
+#define GRENADE_RADIUS 10
+#define GRENADE_SPEED 150
+#define GRENADE_COST 10
+#define GRENADE_BLAST 100
+#define GRENADE_DAMAGE 40
+
 #define BUBBLE_SPEED 30
 #define BUBBLE_COOLDOWN_MAX 2
 #define BUBBLE_COOLDOWN_MIN 0.5
@@ -69,6 +75,18 @@ typedef struct {
 } Bullet;
 
 typedef struct {
+  sf::CircleShape body;
+  sf::Vector2f pos;
+  float angle;
+} Grenade;
+
+typedef struct {
+  sf::CircleShape body;
+  sf::Vector2f pos;
+  float alpha;
+} Blast;
+
+typedef struct {
   sf::RectangleShape body;
   sf::Vector2f pos;
 } Gun;
@@ -108,5 +126,6 @@ typedef struct {
 } Game;
 
 const int PACKAGE_COLOR[] = {0, 255, 0};
+const int BLAST_COLOR[] = {255, 255, 255};
 
 #endif

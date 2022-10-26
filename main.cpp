@@ -12,8 +12,10 @@ Game game;
 Player player;
 Gun gun;
 std::vector<Bullet> bullets;
+std::vector<Grenade> grenades;
 std::vector<Bubble> bubbles;
 std::vector<Package> packages;
+std::vector<Blast> blasts;
 sf::Text textBoxes[NUM_TX] = {sf::Text(), sf::Text(), sf::Text(), sf::Text()};
 sf::Font font;
 std::string soundFiles[NUM_SOUNDS] = {"lib/pop.wav", "lib/reload.wav", "lib/ow.wav", "lib/shot.wav", "lib/empty.wav"};
@@ -100,6 +102,25 @@ void createBullet(Bullet &bullet, sf::Vector2f &mousePos) {
   bullet.body.setRotation(bullet.angle * 180.0 / M_PI);
 }
 
+void createGrenade(Grenade &grenade, sf::Vector2f &mousePos) {
+  grenade.pos = gunPosition();
+  grenade.body.setRadius(GRENADE_RADIUS);
+  grenade.body.setOrigin(GRENADE_RADIUS, GRENADE_RADIUS);
+  grenade.body.setPosition(grenade.pos);
+  grenade.body.setFillColor(sf::Color::Cyan);
+  sf::Vector2f dirPos = mousePos - grenade.pos;
+  grenade.angle = vAngle(dirPos);
+}
+
+void createBlast(Blast &blast, sf::Vector2f pos) {
+  blast.pos = pos;
+  blast.alpha = 128;
+  blast.body.setRadius(GRENADE_BLAST);
+  blast.body.setOrigin(GRENADE_BLAST, GRENADE_BLAST);
+  blast.body.setPosition(blast.pos);
+  blast.body.setFillColor(sf::Color(BLAST_COLOR[0], BLAST_COLOR[1], BLAST_COLOR[2])); 
+}
+
 void createBubble(Bubble &bubble) {
   bubble.attack = 0;
   bubble.health = rand() % 50 + 20.0;
@@ -162,6 +183,18 @@ void shoot(sf::Vector2f mousePos) {
     player.bullets--;
     setTextBoxes();
     sounds[SOUND_SHOT].play();
+  } else {
+    sounds[SOUND_EMPTY].play();
+  }
+}
+
+void shootGrenade(sf::Vector2f mousePos) {
+  if (game.state != ST_PLAY) return;
+  if (player.cash >= GRENADE_COST) {
+    player.cash -= GRENADE_COST;
+    Grenade grenade;
+    createGrenade(grenade, mousePos);
+    grenades.push_back(grenade);
   } else {
     sounds[SOUND_EMPTY].play();
   }
@@ -244,6 +277,46 @@ int update(sf::RenderWindow &window, float dt) {
     }
   }
 
+  auto grenade = grenades.begin();
+  while (grenade != grenades.end()) {
+    grenade->pos.x += GRENADE_SPEED * dt * cos(grenade->angle);
+    grenade->pos.y += GRENADE_SPEED * dt * sin(grenade->angle);
+    bool erased = false;
+    for (auto &bubble : bubbles) {
+      if (vAbs(bubble.pos - grenade->pos) <= radius(bubble.health) + GRENADE_RADIUS) {
+        erased = true;
+        break;
+      }
+    }
+    if (erased) {
+      Blast blast;
+      createBlast(blast, grenade->pos);
+      blasts.push_back(blast);
+      for (auto &bubble : bubbles) {
+        if (vAbs(bubble.pos - grenade->pos) <= GRENADE_BLAST) {
+          bubble.health -= GRENADE_DAMAGE;
+          bubble.body.setRadius(radius(bubble.health));
+        }
+      }
+    }
+    if (erased || grenade->pos.x < 0 || grenade->pos.y > WIN_W || grenade->pos.y < 0 || grenade->pos.y > WIN_H) {
+      grenade = grenades.erase(grenade);
+    } else {
+      grenade->body.setPosition(grenade->pos);
+      grenade++;
+    }
+  }
+  auto blast = blasts.begin();
+  while (blast != blasts.end()) {
+    blast->alpha -= dt * 100;
+    if (blast->alpha <= 0) {
+      blast = blasts.erase(blast);
+    } else {
+      blast->body.setFillColor(sf::Color(BLAST_COLOR[0], BLAST_COLOR[0], BLAST_COLOR[0], blast->alpha));
+      blast++;
+    }
+  }
+
   auto bubble = bubbles.begin();
   while (bubble != bubbles.end()) {
     if (bubble->health <= 0) {
@@ -299,8 +372,14 @@ void draw(sf::RenderWindow &window) {
   for (auto &bullet : bullets) {
     window.draw(bullet.body);
   }
+  for (auto &grenade : grenades) {
+    window.draw(grenade.body);
+  }
   for (auto &package : packages) {
     window.draw(package.body);
+  }
+  for (auto &blast : blasts) {
+    window.draw(blast.body);
   }
   for (int i = 0; i < NUM_TX - 1; i++) {
     window.draw(textBoxes[i]);
@@ -384,6 +463,9 @@ int main() {
               break;
             case sf::Keyboard::R:
               buyBullets();
+              break;
+            case sf::Keyboard::F:
+              shootGrenade(sf::Vector2f(sf::Mouse::getPosition(window)));
               break;
             case sf::Keyboard::Z:
               restart();
