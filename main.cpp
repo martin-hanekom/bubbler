@@ -5,96 +5,10 @@
 #include <vector>
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
-
-#define WIN_W 1600
-#define WIN_H 900
-#define FS 60
-
-#define HEALTH_DIV 10
-#define HEALTH_OFFSET 8
-#define SPEED_DIV 2
-#define MIN_SPEED 10
-#define PLAYER_HEALTH 100
-#define PLAYER_SPEED 90
-#define PLAYER_BULLETS 30
-#define GUN_W 3
-#define GUN_H 15
-#define GUN_COOLDOWN 0.2
-#define BULLET_W 5
-#define BULLET_H 1
-#define BULLET_SPEED 250
-#define BULLET_ALT 5
-#define BULLET_DAMAGE 10
-#define AMMO_COST 15
-#define AMMO_AMOUNT 30
-#define BUBBLE_SPEED 30
-#define BUBBLE_COOLDOWN 2
-#define BUBBLE_DAMAGE 20
-#define BUBBLE_ATTACK 1
-#define PACKAGE_RADIUS 10
-
-#define ST_INIT 0
-#define ST_PLAY 1
-#define ST_PAUSE 2
-
-#define NUM_CD 3
-#define CD_BUBBLE 0
-#define CD_GUN 1
-
-#define NUM_TX 5
-#define TX_CASH 0
-#define TX_HEALTH 1
-#define TX_KILLED 2
-#define TX_BULLETS 3
-#define TX_SPLASH 4
-
-#define NUM_SOUNDS 5
-#define SOUND_POP 0
-#define SOUND_RELOAD 1
-#define SOUND_OW 2
-#define SOUND_SHOT 3
-#define SOUND_EMPTY 4
-
-// struct definitions
-typedef struct {
-  sf::RectangleShape body;
-  sf::Vector2f pos;
-  float angle;
-} Bullet;
-
-typedef struct {
-  sf::RectangleShape body;
-  sf::Vector2f pos;
-} Gun;
-
-typedef struct {
-  sf::CircleShape body;
-  sf::Vector2f pos;
-  int health;
-  int cash;
-  int killed;
-  int bullets;
-} Player;
-
-typedef struct {
-  sf::CircleShape body;
-  sf::Vector2f pos;
-  int health;
-  int origHealth;
-  float speed;
-  float attack;
-} Bubble;
-
-typedef struct {
-  sf::CircleShape body;
-  sf::Vector2f pos;
-  int health;
-  float alpha;
-} Package;
+#include "main.hpp"
 
 // global variables
-int gameState = ST_INIT;
-int PACKAGE_COLOR[] = {0, 255, 0};
+Game game;
 Player player;
 Gun gun;
 std::vector<Bullet> bullets;
@@ -105,7 +19,6 @@ sf::Font font;
 std::string soundFiles[NUM_SOUNDS] = {"lib/pop.wav", "lib/reload.wav", "lib/ow.wav", "lib/shot.wav", "lib/empty.wav"};
 sf::SoundBuffer soundBuffers[NUM_SOUNDS];
 sf::Sound sounds[NUM_SOUNDS];
-float cooldown[NUM_CD] = {BUBBLE_COOLDOWN, GUN_COOLDOWN};
 
 // helper functions
 float vAbs(sf::Vector2f vec) {
@@ -126,6 +39,11 @@ float speed(float maxSpeed, int health) {
   return MIN_SPEED + (maxSpeed - maxSpeed * health / 100);
 }
 
+float bubbleCooldown() {
+  float newCooldown = BUBBLE_COOLDOWN_MAX - WAVE_COOLDOWN * game.wave;
+  return (newCooldown > BUBBLE_COOLDOWN_MIN) ? newCooldown : BUBBLE_COOLDOWN_MIN;
+}
+
 void setTextBoxes() {
   char msg[64];
   snprintf(msg, sizeof(msg), "Cash: $%d", player.cash);
@@ -136,6 +54,22 @@ void setTextBoxes() {
   textBoxes[TX_KILLED].setString(msg);
   snprintf(msg, sizeof(msg), "Bullets: %d", player.bullets);
   textBoxes[TX_BULLETS].setString(msg);
+}
+
+void displaySplash(std::string msg, float duration) {
+  textBoxes[TX_SPLASH].setString(msg);
+  sf::FloatRect size = textBoxes[TX_SPLASH].getLocalBounds();
+  textBoxes[TX_SPLASH].setOrigin(size.width / 2, size.height / 2);
+  game.splash = duration;
+}
+
+void nextRound() {
+  game.wave++;
+  game.numBubbles = WAVE_OFFSET + WAVE_INC * game.wave;
+  game.numSpawned = 0;
+  char msg[64];
+  snprintf(msg, sizeof(msg), "Wave %d", game.wave);
+  displaySplash(msg, WAVE_SPLASH_LEN);
 }
 
 sf::Vector2f gunPosition() {
@@ -220,7 +154,7 @@ void buyBullets() {
 }
 
 void shoot(sf::Vector2f mousePos) {
-  if (gameState != ST_PLAY) return;
+  if (game.state != ST_PLAY) return;
   if (player.bullets > 0) {
     Bullet bullet;
     createBullet(bullet, mousePos);
@@ -234,7 +168,7 @@ void shoot(sf::Vector2f mousePos) {
 }
 
 int update(sf::RenderWindow &window, float dt) {
-  if (gameState != ST_PLAY) return 0;
+  if (game.state != ST_PLAY) return 0;
 
   // Keypress
   if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
@@ -247,13 +181,14 @@ int update(sf::RenderWindow &window, float dt) {
   } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
     player.pos.x += PLAYER_SPEED * dt;
   }
-  cooldown[CD_GUN] = (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) ? cooldown[CD_GUN] - dt : GUN_COOLDOWN;
-  if (cooldown[CD_GUN] <= 0) {
+  game.cooldown[CD_GUN] = (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) ? game.cooldown[CD_GUN] - dt : GUN_COOLDOWN;
+  if (game.cooldown[CD_GUN] <= 0) {
     shoot(sf::Vector2f(sf::Mouse::getPosition(window)));
-    cooldown[CD_GUN] = GUN_COOLDOWN;
+    game.cooldown[CD_GUN] = GUN_COOLDOWN;
   }
   player.body.setPosition(player.pos);
   gun.body.setPosition(player.pos);
+  game.splash = (game.splash > 0) ? game.splash - dt : 0;
 
   auto package = packages.begin();
   float playerRadius = radius(player.health);
@@ -274,12 +209,15 @@ int update(sf::RenderWindow &window, float dt) {
   }
 
   // Cooldown
-  cooldown[CD_BUBBLE] -= dt;
-  if (cooldown[CD_BUBBLE] <= 0) {
-    Bubble bubble;
-    createBubble(bubble);
-    bubbles.push_back(bubble);
-    cooldown[CD_BUBBLE] = BUBBLE_COOLDOWN;
+  if (game.numSpawned < game.numBubbles) {
+    game.cooldown[CD_BUBBLE] -= dt;
+    if (game.cooldown[CD_BUBBLE] <= 0) {
+      Bubble bubble;
+      createBubble(bubble);
+      bubbles.push_back(bubble);
+      game.numSpawned++;
+      game.cooldown[CD_BUBBLE] = bubbleCooldown();
+    }
   }
 
   // Velocity-based
@@ -342,6 +280,10 @@ int update(sf::RenderWindow &window, float dt) {
     }
   }
 
+  if (game.numBubbles == game.numSpawned && bubbles.size() == 0) {
+    nextRound();
+  }
+
   if (player.health < 0) return -1;
   if (setUi) return 1;
   return 0;
@@ -363,14 +305,16 @@ void draw(sf::RenderWindow &window) {
   for (int i = 0; i < NUM_TX - 1; i++) {
     window.draw(textBoxes[i]);
   }
-  if (gameState == ST_INIT || gameState == ST_PAUSE) {
-    window.draw(textBoxes[NUM_TX - 1]);
+  if (game.splash > 0) {
+    window.draw(textBoxes[TX_SPLASH]);
   }
   window.display();
 }
 
 void restart() {
-  gameState = ST_INIT;
+  game.state = ST_INIT;
+  game.wave = 0;
+
   player.pos = sf::Vector2f(WIN_W / 2, WIN_H / 2);
   player.health = PLAYER_HEALTH;
   player.cash = 0;
@@ -391,9 +335,9 @@ void restart() {
     textBoxes[i].setPosition(sf::Vector2f(0, 30*i));
     textBoxes[i].setFillColor(sf::Color::White);
   }
-  textBoxes[TX_SPLASH].setPosition(sf::Vector2f(WIN_W / 2 - 200, WIN_H / 2 - 15));
-  textBoxes[TX_SPLASH].setString("Press Spacebar to Play, C to reload and R to restart!");
+  textBoxes[TX_SPLASH].setPosition(sf::Vector2f(WIN_W / 2, WIN_H / 2));
   setTextBoxes();
+  displaySplash(PAUSE_MSG, 0.1);
 }
 
 int main() {
@@ -431,12 +375,17 @@ int main() {
               window.close();
               break;
             case sf::Keyboard::Space:
-              gameState = gameState % 2 + 1;
-              break;
-            case sf::Keyboard::C:
-              buyBullets();
+              if (game.state == ST_INIT) {
+                nextRound();
+              } else {
+                displaySplash(PAUSE_MSG, 0.1);
+              }
+              game.state = game.state % 2 + 1;
               break;
             case sf::Keyboard::R:
+              buyBullets();
+              break;
+            case sf::Keyboard::Z:
               restart();
               break;
           }
@@ -458,7 +407,7 @@ int main() {
       case -1:
         std::cout << "Game over! You killed " << player.killed << " bubbles." << std::endl;
         restart();
-        gameState = ST_INIT;
+        game.state = ST_INIT;
         break;
       case 1:
         setTextBoxes();

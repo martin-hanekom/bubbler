@@ -2,7 +2,7 @@ IDIR = ../include
 CC = g++
 CFLAGS = -I.
 LIBS = -lsfml-graphics -lsfml-audio -lsfml-window -lsfml-system -lm
-DEPS = 
+DEPS = main.hpp
 OBJ = main.o
 
 #DEPS = $(pathsubst %,$(IDIR)/%,$(_DEPS))
