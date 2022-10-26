@@ -58,6 +58,7 @@
 #define TX_KILLED 2
 #define TX_BULLETS 3
 #define TX_SPLASH 4
+#define INIT_MSG "Press 1 for singleplayer, 2 for multiplayer"
 #define PAUSE_MSG "Press Spacebar to Play, R to reload and Z to restart!"
 
 #define NUM_SOUNDS 5

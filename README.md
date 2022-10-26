@@ -17,10 +17,10 @@ The goal of the game is to fight against an endless wave of enemy bubbles with a
 
 ### Controls
 
-Aim and shoot with the mouse.
-WASD - move around screen.
-R - reload gun (purchase bullets)
-Z - restart game
-Spacebar - Play/Pause
+Aim and shoot with the mouse.  
+WASD - move around screen.  
+R - reload gun (purchase bullets)  
+Z - restart game  
+Spacebar - Play/Pause  
 
 Enjoy!
