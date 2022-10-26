@@ -1,6 +1,8 @@
 #ifndef MAIN_HPP
 #define MAIN_HPP
 
+#include <string>
+
 #define WIN_W 1600
 #define WIN_H 900
 #define FS 60
@@ -8,10 +10,11 @@
 #define HEALTH_DIV 10
 #define HEALTH_OFFSET 8
 #define SPEED_DIV 2
-#define MIN_SPEED 10
+#define MIN_SPEED 30
+#define ODDS 5
 
 #define PLAYER_HEALTH 100
-#define PLAYER_SPEED 90
+#define PLAYER_SPEED 100
 #define PLAYER_BULLETS 30
 
 #define GUN_W 3
@@ -22,20 +25,21 @@
 #define BULLET_H 1
 #define BULLET_SPEED 250
 #define BULLET_ALT 10
-#define BULLET_DAMAGE 10
+#define BULLET_DAMAGE 25.0
 #define AMMO_COST 15
 #define AMMO_AMOUNT 30
 
-#define GRENADE_RADIUS 10
+#define GRENADE_RADIUS 20
 #define GRENADE_SPEED 150
 #define GRENADE_COST 10
 #define GRENADE_BLAST 100
-#define GRENADE_DAMAGE 40
+#define GRENADE_DAMAGE 50
 
-#define BUBBLE_SPEED 30
+#define BUBBLE_HEALTH_OFFSET 20.0
+#define BUBBLE_SPEED 80
 #define BUBBLE_COOLDOWN_MAX 2
 #define BUBBLE_COOLDOWN_MIN 0.5
-#define BUBBLE_DAMAGE 20
+#define BUBBLE_DAMAGE 40
 #define BUBBLE_ATTACK 1
 #define PACKAGE_RADIUS 10
 
@@ -52,21 +56,24 @@
 #define CD_BUBBLE 0
 #define CD_GUN 1
 
-#define NUM_TX 5
+#define NUM_TX 6
 #define TX_CASH 0
 #define TX_HEALTH 1
 #define TX_KILLED 2
 #define TX_BULLETS 3
-#define TX_SPLASH 4
+#define TX_INFO 4
+#define TX_SPLASH 5
 #define INIT_MSG "Press 1 for singleplayer, 2 for multiplayer"
 #define PAUSE_MSG "Press Spacebar to Play, R to reload and Z to restart!"
 
-#define NUM_SOUNDS 5
+#define NUM_SOUNDS 7
 #define SOUND_POP 0
 #define SOUND_RELOAD 1
 #define SOUND_OW 2
 #define SOUND_SHOT 3
 #define SOUND_EMPTY 4
+#define SOUND_BLAST 5
+#define SOUND_HEAL 6
 
 // struct definitions
 typedef struct {
@@ -128,5 +135,6 @@ typedef struct {
 
 const int PACKAGE_COLOR[] = {0, 255, 0};
 const int BLAST_COLOR[] = {255, 255, 255};
+const std::string soundFiles[NUM_SOUNDS] = {"lib/pop.wav", "lib/reload.wav", "lib/ow.wav", "lib/shot.wav", "lib/empty.wav", "lib/blast.wav", "lib/heal.wav"};
 
 #endif

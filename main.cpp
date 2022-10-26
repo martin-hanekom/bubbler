@@ -18,7 +18,6 @@ std::vector<Package> packages;
 std::vector<Blast> blasts;
 sf::Text textBoxes[NUM_TX] = {sf::Text(), sf::Text(), sf::Text(), sf::Text()};
 sf::Font font;
-std::string soundFiles[NUM_SOUNDS] = {"lib/pop.wav", "lib/reload.wav", "lib/ow.wav", "lib/shot.wav", "lib/empty.wav"};
 sf::SoundBuffer soundBuffers[NUM_SOUNDS];
 sf::Sound sounds[NUM_SOUNDS];
 
@@ -47,7 +46,7 @@ float bubbleCooldown() {
 }
 
 void setTextBoxes() {
-  char msg[64];
+  char msg[128];
   snprintf(msg, sizeof(msg), "Cash: $%d", player.cash);
   textBoxes[TX_CASH].setString(msg);
   snprintf(msg, sizeof(msg), "Health: %d", player.health);
@@ -56,6 +55,7 @@ void setTextBoxes() {
   textBoxes[TX_KILLED].setString(msg);
   snprintf(msg, sizeof(msg), "Bullets: %d", player.bullets);
   textBoxes[TX_BULLETS].setString(msg);
+  textBoxes[TX_INFO].setString("Ammo [R]: $15, Grenade [F]: $20");
 }
 
 void displaySplash(std::string msg, float duration) {
@@ -121,9 +121,13 @@ void createBlast(Blast &blast, sf::Vector2f pos) {
   blast.body.setFillColor(sf::Color(BLAST_COLOR[0], BLAST_COLOR[1], BLAST_COLOR[2])); 
 }
 
-void createBubble(Bubble &bubble) {
+void createBubble(Bubble &bubble, int health = -1) {
   bubble.attack = 0;
-  bubble.health = rand() % 50 + 20.0;
+  if (health == -1) {
+    bubble.health = rand() % 50 + BUBBLE_HEALTH_OFFSET;
+  } else {
+    bubble.health = health;
+  }
   bubble.origHealth = bubble.health;
   float r = radius(bubble.health);
   int side = rand() % 4;
@@ -229,11 +233,12 @@ int update(sf::RenderWindow &window, float dt) {
   while (package != packages.end()) {
     package->alpha -= dt * 25;
     package->body.setFillColor(sf::Color(PACKAGE_COLOR[0], PACKAGE_COLOR[1], PACKAGE_COLOR[2], ceil(package->alpha)));
-    if (vAbs(player.pos - package->pos) <= playerRadius) {
+    if (vAbs(player.pos - package->pos) <= playerRadius + PACKAGE_RADIUS) {
       player.health += package->health;
       resizePlayer();
       package = packages.erase(package);
       setUi = true;
+      sounds[SOUND_HEAL].play();
     } else if (package->alpha <= 0) {
       package = packages.erase(package);
     } else {
@@ -298,6 +303,7 @@ int update(sf::RenderWindow &window, float dt) {
           bubble.body.setRadius(radius(bubble.health));
         }
       }
+      sounds[SOUND_BLAST].play();
     }
     if (erased || grenade->pos.x < 0 || grenade->pos.y > WIN_W || grenade->pos.y < 0 || grenade->pos.y > WIN_H) {
       grenade = grenades.erase(grenade);
@@ -317,14 +323,18 @@ int update(sf::RenderWindow &window, float dt) {
     }
   }
 
+  bool spawnMore = false;
   auto bubble = bubbles.begin();
   while (bubble != bubbles.end()) {
     if (bubble->health <= 0) {
-      player.cash += ceil(bubble->origHealth / 10.0);
-      if (rand() % 20 == 4) {
+      player.cash += ceil(bubble->origHealth / BULLET_DAMAGE);
+      int odds = rand() % ODDS;
+      if (odds == 1) {
         Package package;
         createPackage(package, bubble->pos);
         packages.push_back(package);
+      } else if (odds == 2) {
+        spawnMore = true;
       }
       player.killed++;
       bubble = bubbles.erase(bubble);
@@ -350,6 +360,13 @@ int update(sf::RenderWindow &window, float dt) {
       }
       bubble->body.setPosition(bubble->pos);
       bubble++;
+    }
+  }
+  if (spawnMore) {
+    for (int i = 0; i < 2; i++) {
+      Bubble newBubble;
+      createBubble(newBubble, bubble->health / 2);
+      bubbles.push_back(newBubble);
     }
   }
 
@@ -381,7 +398,7 @@ void draw(sf::RenderWindow &window) {
   for (auto &blast : blasts) {
     window.draw(blast.body);
   }
-  for (int i = 0; i < NUM_TX - 1; i++) {
+  for (int i = 0; i < TX_SPLASH; i++) {
     window.draw(textBoxes[i]);
   }
   if (game.splash > 0) {
@@ -411,10 +428,11 @@ void restart() {
   for (int i = 0; i < NUM_TX; i++) {
     textBoxes[i].setFont(font);
     textBoxes[i].setCharacterSize(24);
-    textBoxes[i].setPosition(sf::Vector2f(0, 30*i));
+    textBoxes[i].setPosition(sf::Vector2f(10, 10 + 30*i));
     textBoxes[i].setFillColor(sf::Color::White);
   }
   textBoxes[TX_SPLASH].setPosition(sf::Vector2f(WIN_W / 2, WIN_H / 2));
+  textBoxes[TX_INFO].setPosition(sf::Vector2f(10, WIN_H - 40));
   setTextBoxes();
   displaySplash(PAUSE_MSG, 0.1);
 }
