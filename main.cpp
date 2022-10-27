@@ -51,6 +51,8 @@ void setTextBoxes() {
   textBoxes[TX_CASH].setString(msg);
   snprintf(msg, sizeof(msg), "Health: %d", player.health);
   textBoxes[TX_HEALTH].setString(msg);
+  snprintf(msg, sizeof(msg), "Wave: %d", game.wave);
+  textBoxes[TX_WAVE].setString(msg);
   snprintf(msg, sizeof(msg), "Killed: %d", player.killed);
   textBoxes[TX_KILLED].setString(msg);
   snprintf(msg, sizeof(msg), "Bullets: %d", player.bullets);
@@ -121,39 +123,58 @@ void createBlast(Blast &blast, sf::Vector2f pos) {
   blast.body.setFillColor(sf::Color(BLAST_COLOR[0], BLAST_COLOR[1], BLAST_COLOR[2])); 
 }
 
-void createBubble(Bubble &bubble, int health = -1) {
+void createBubble(Bubble &bubble, const Bubble *parentBubble = NULL) {
   bubble.attack = 0;
-  if (health == -1) {
+  float r = 0;
+  if (!parentBubble) {
     bubble.health = rand() % 50 + BUBBLE_HEALTH_OFFSET;
+    r = radius(bubble.health);
+    int side = rand() % 4;
+    switch (side) {
+      case 0:
+        bubble.pos = sf::Vector2f(-r, rand() % WIN_H);
+        break;
+      case 1:
+        bubble.pos = sf::Vector2f(rand() % WIN_W, -r);
+        break;
+      case 2:
+        bubble.pos = sf::Vector2f(WIN_W + r, rand() % WIN_H);
+        break;
+      default:
+        bubble.pos = sf::Vector2f(rand() % WIN_W, WIN_H + r);
+        break;
+    }
   } else {
-    bubble.health = health;
+    bubble.health = parentBubble->origHealth;
+    bubble.pos = parentBubble->pos + sf::Vector2f(rand() % 40 - 20, rand() % 40 - 20);
+    r = radius(bubble.health);
   }
   bubble.origHealth = bubble.health;
-  float r = radius(bubble.health);
-  int side = rand() % 4;
-  switch (side) {
-    case 0:
-      bubble.pos = sf::Vector2f(-r, rand() % WIN_H);
-      break;
-    case 1:
-      bubble.pos = sf::Vector2f(rand() % WIN_W, -r);
-      break;
-    case 2:
-      bubble.pos = sf::Vector2f(WIN_W + r, rand() % WIN_H);
-      break;
-    default:
-      bubble.pos = sf::Vector2f(rand() % WIN_W, WIN_H + r);
-      break;
-  }
   bubble.body.setRadius(r);
   bubble.body.setOrigin(r, r);
   bubble.body.setPosition(bubble.pos);
   bubble.body.setFillColor(sf::Color::Blue);
+  bubble.hat.setRadius(HAT_RADIUS);
+  bubble.hat.setOrigin(HAT_RADIUS, HAT_RADIUS);
+  bubble.hat.setPosition(bubble.pos);
+  if (bubble.modifiers[MOD_PACKAGE] == MOD_PACKAGE) {
+    bubble.hat.setFillColor(sf::Color::Green);
+  } else if (bubble.modifiers[MOD_DOUBLE] == MOD_DOUBLE) {
+    bubble.hat.setFillColor(sf::Color::Black);
+  }
+}
+
+void resizeBubble(Bubble &bubble) {
+  if (bubble.health > 0) {
+    float r = radius(bubble.health);
+    bubble.body.setRadius(r);
+    bubble.body.setOrigin(r, r);
+  }
 }
 
 void createPackage(Package &package, sf::Vector2f pos) {
   package.pos = pos;
-  package.health = rand() % 3 * 10;
+  package.health = rand() % 2 * 10 + PACKAGE_MIN_HEALTH;
   package.alpha = 255;
   package.body.setRadius(PACKAGE_RADIUS);
   package.body.setOrigin(PACKAGE_RADIUS, PACKAGE_RADIUS);
@@ -231,7 +252,7 @@ int update(sf::RenderWindow &window, float dt) {
   float playerRadius = radius(player.health);
   bool setUi = false;
   while (package != packages.end()) {
-    package->alpha -= dt * 25;
+    package->alpha -= dt * PACKAGE_FADE;
     package->body.setFillColor(sf::Color(PACKAGE_COLOR[0], PACKAGE_COLOR[1], PACKAGE_COLOR[2], ceil(package->alpha)));
     if (vAbs(player.pos - package->pos) <= playerRadius + PACKAGE_RADIUS) {
       player.health += package->health;
@@ -269,7 +290,7 @@ int update(sf::RenderWindow &window, float dt) {
       float r = radius(bubble.health);
       if (vAbs(bubble.pos - bullet->pos) <= r || vAbs(bubble.pos - altPos) <= r) {
         bubble.health -= BULLET_DAMAGE;
-        bubble.body.setRadius(radius(bubble.health));
+        resizeBubble(bubble);
         erased = true;
         break;
       }
@@ -300,7 +321,7 @@ int update(sf::RenderWindow &window, float dt) {
       for (auto &bubble : bubbles) {
         if (vAbs(bubble.pos - grenade->pos) <= GRENADE_BLAST) {
           bubble.health -= GRENADE_DAMAGE;
-          bubble.body.setRadius(radius(bubble.health));
+          resizeBubble(bubble);
         }
       }
       sounds[SOUND_BLAST].play();
@@ -323,18 +344,21 @@ int update(sf::RenderWindow &window, float dt) {
     }
   }
 
-  bool spawnMore = false;
+  std::vector<Bubble> newBubbles;
   auto bubble = bubbles.begin();
   while (bubble != bubbles.end()) {
     if (bubble->health <= 0) {
-      player.cash += ceil(bubble->origHealth / BULLET_DAMAGE);
-      int odds = rand() % ODDS;
-      if (odds == 1) {
+      player.cash += ceil(bubble->origHealth / BULLET_DAMAGE) + 1;
+      if (bubble->modifiers[MOD_PACKAGE] == MOD_PACKAGE) {
         Package package;
         createPackage(package, bubble->pos);
         packages.push_back(package);
-      } else if (odds == 2) {
-        spawnMore = true;
+      } else if (bubble->modifiers[MOD_DOUBLE] == MOD_DOUBLE) {
+        for (int i = 0; i < 2; i++) {
+          Bubble newBubble;
+          createBubble(newBubble, &(*bubble));
+          newBubbles.push_back(newBubble);
+        }
       }
       player.killed++;
       bubble = bubbles.erase(bubble);
@@ -359,15 +383,12 @@ int update(sf::RenderWindow &window, float dt) {
         bubble->attack = 0.1;
       }
       bubble->body.setPosition(bubble->pos);
+      bubble->hat.setPosition(bubble->pos);
       bubble++;
     }
   }
-  if (spawnMore) {
-    for (int i = 0; i < 2; i++) {
-      Bubble newBubble;
-      createBubble(newBubble, bubble->health / 2);
-      bubbles.push_back(newBubble);
-    }
+  if (newBubbles.size()) {
+    bubbles.insert(bubbles.end(), newBubbles.begin(), newBubbles.end());
   }
 
   if (game.numBubbles == game.numSpawned && bubbles.size() == 0) {
@@ -383,6 +404,12 @@ void draw(sf::RenderWindow &window) {
   window.clear();
   for (auto &bubble : bubbles) {
     window.draw(bubble.body);
+    for (int i = 0; i < NUM_MODS; i++) {
+      if (bubble.modifiers[i] == i) {
+        window.draw(bubble.hat);
+        break;
+      }
+    }
   }
   window.draw(player.body);
   window.draw(gun.body);
@@ -457,6 +484,7 @@ int main() {
   sounds[SOUND_OW].setVolume(10);
   sounds[SOUND_SHOT].setVolume(10);
   sounds[SOUND_EMPTY].setVolume(10);
+  sounds[SOUND_BLAST].setVolume(20);
   restart();
 
   while (window.isOpen()) {

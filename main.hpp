@@ -11,7 +11,13 @@
 #define HEALTH_OFFSET 8
 #define SPEED_DIV 2
 #define MIN_SPEED 30
-#define ODDS 5
+
+#define NUM_MODS 2
+#define MOD_PACKAGE 0
+#define MOD_DOUBLE 1
+#define PACKAGE_ODDS 30
+#define DOUBLE_ODDS 10
+#define HAT_RADIUS 3
 
 #define PLAYER_HEALTH 100
 #define PLAYER_SPEED 100
@@ -36,15 +42,18 @@
 #define GRENADE_DAMAGE 50
 
 #define BUBBLE_HEALTH_OFFSET 20.0
-#define BUBBLE_SPEED 80
+#define BUBBLE_SPEED 50
 #define BUBBLE_COOLDOWN_MAX 2
-#define BUBBLE_COOLDOWN_MIN 0.5
+#define BUBBLE_COOLDOWN_MIN 0.2
 #define BUBBLE_DAMAGE 40
 #define BUBBLE_ATTACK 1
-#define PACKAGE_RADIUS 10
 
-#define WAVE_OFFSET 10
-#define WAVE_INC 10
+#define PACKAGE_RADIUS 10
+#define PACKAGE_FADE 10
+#define PACKAGE_MIN_HEALTH 10
+
+#define WAVE_OFFSET 5
+#define WAVE_INC 25
 #define WAVE_COOLDOWN 0.1
 #define WAVE_SPLASH_LEN 3
 
@@ -56,13 +65,14 @@
 #define CD_BUBBLE 0
 #define CD_GUN 1
 
-#define NUM_TX 6
+#define NUM_TX 7
 #define TX_CASH 0
 #define TX_HEALTH 1
-#define TX_KILLED 2
-#define TX_BULLETS 3
-#define TX_INFO 4
-#define TX_SPLASH 5
+#define TX_WAVE 2
+#define TX_KILLED 3
+#define TX_BULLETS 4
+#define TX_INFO 5
+#define TX_SPLASH 6
 #define INIT_MSG "Press 1 for singleplayer, 2 for multiplayer"
 #define PAUSE_MSG "Press Spacebar to Play, R to reload and Z to restart!"
 
@@ -110,11 +120,13 @@ typedef struct {
 
 typedef struct {
   sf::CircleShape body;
+  sf::CircleShape hat;
   sf::Vector2f pos;
   int health;
   int origHealth;
   float speed;
   float attack;
+  int modifiers[NUM_MODS] = {rand() % PACKAGE_ODDS, rand() % DOUBLE_ODDS};
 } Bubble;
 
 typedef struct {
