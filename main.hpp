@@ -57,6 +57,12 @@
 #define WAVE_COOLDOWN 0.1
 #define WAVE_SPLASH_LEN 3
 
+#define NUM_WALLS 16
+#define WALL_OVERLAP 20
+#define WALL_BASE 20
+#define WALL_MIN 100
+#define WALL_MAX 230
+
 #define ST_INIT 0
 #define ST_PLAY 1
 #define ST_PAUSE 2
@@ -135,6 +141,12 @@ typedef struct {
   int health;
   float alpha;
 } Package;
+
+typedef struct {
+  sf::RectangleShape body;
+  sf::Vector2f pos;
+  sf::Vector2f size;
+} Wall;
 
 typedef struct {
   int state;

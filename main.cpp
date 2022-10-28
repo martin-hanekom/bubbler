@@ -15,6 +15,7 @@ std::vector<Bullet> bullets;
 std::vector<Grenade> grenades;
 std::vector<Bubble> bubbles;
 std::vector<Package> packages;
+Wall walls[NUM_WALLS];
 std::vector<Blast> blasts;
 sf::Text textBoxes[NUM_TX] = {sf::Text(), sf::Text(), sf::Text(), sf::Text()};
 sf::Font font;
@@ -164,6 +165,25 @@ void createBubble(Bubble &bubble, const Bubble *parentBubble = NULL) {
   }
 }
 
+void createWalls() {
+  for (int i = 0; i < NUM_WALLS; i++) {
+    sf::Vector2f anchor((i / 2) % 4 * (WIN_W / 4), (i % 2) * (WIN_H / 2));
+    walls[i].pos = anchor + sf::Vector2f(rand() % (WIN_W / 4 + 2 * WALL_OVERLAP) - WALL_OVERLAP, rand() % (WIN_H / 2 + 2 * WALL_OVERLAP) - WALL_OVERLAP);
+    if (rand() % 2) {
+      walls[i].size = sf::Vector2f(rand() % WALL_MAX + WALL_MIN, WALL_BASE);
+    } else {
+      walls[i].size = sf::Vector2f(WALL_BASE, rand() % WALL_MAX + WALL_MIN);
+    }
+    walls[i].body.setPosition(walls[i].pos);
+    walls[i].body.setSize(walls[i].size);
+    walls[i].body.setOrigin(walls[i].size.x / 2, walls[i].size.y / 2);
+  }
+}
+
+bool wallCollide(sf::Vector2f pos, float radius = 0) {
+
+}
+
 void resizeBubble(Bubble &bubble) {
   if (bubble.health > 0) {
     float r = radius(bubble.health);
@@ -230,7 +250,9 @@ int update(sf::RenderWindow &window, float dt) {
 
   // Keypress
   if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
-    player.pos.y -= PLAYER_SPEED * dt;
+    if (!wallCollide(player.body)) {
+      player.pos.y -= PLAYER_SPEED * dt;
+    }
   } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
     player.pos.y += PLAYER_SPEED * dt;
   }
@@ -402,6 +424,9 @@ int update(sf::RenderWindow &window, float dt) {
 
 void draw(sf::RenderWindow &window) {
   window.clear();
+  for (auto &wall : walls) {
+    window.draw(wall.body);
+  }
   for (auto &bubble : bubbles) {
     window.draw(bubble.body);
     for (int i = 0; i < NUM_MODS; i++) {
@@ -451,6 +476,7 @@ void restart() {
   bullets.clear();
   bubbles.clear();
   packages.clear();
+  createWalls();
 
   for (int i = 0; i < NUM_TX; i++) {
     textBoxes[i].setFont(font);
