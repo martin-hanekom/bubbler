@@ -117,6 +117,7 @@ typedef struct {
 
 typedef struct {
   sf::CircleShape body;
+  sf::CircleShape hat;
   sf::Vector2f pos;
   int health;
   int cash;

@@ -22,6 +22,7 @@ sf::Font font;
 sf::SoundBuffer soundBuffers[NUM_SOUNDS];
 sf::Sound sounds[NUM_SOUNDS];
 
+// TODO: hat
 // helper functions
 float vAbs(sf::Vector2f vec) {
   return sqrt(vec.x * vec.x + vec.y * vec.y);
@@ -89,6 +90,8 @@ void resizePlayer() {
   player.body.setOrigin(r, r);
   player.body.setPosition(player.pos);
   player.body.setFillColor(sf::Color::Red);
+  player.hat.setRadius(HAT_RADIUS);
+  player.hat.setOrigin(HAT_RADIUS, HAT_RADIUS);
   gun.body.setOrigin(-radius(player.health), 0);
   gun.body.setPosition(player.pos);
 }
