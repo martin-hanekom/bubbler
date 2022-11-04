@@ -179,12 +179,28 @@ void createWalls() {
     }
     walls[i].body.setPosition(walls[i].pos);
     walls[i].body.setSize(walls[i].size);
-    walls[i].body.setOrigin(walls[i].size.x / 2, walls[i].size.y / 2);
+    //walls[i].body.setOrigin(walls[i].size.x / 2, walls[i].size.y / 2);
   }
 }
 
-bool wallCollide(sf::Vector2f pos, float radius = 0) {
+void wallCorners(Wall wall, sf::Vector2f corners[4], float radius = 0) {
+  corners[0] = wall.pos - sf::Vector2f(radius, radius);
+  corners[1] = sf::Vector2f(wall.pos.x - radius, wall.pos.y + wall.size.y + radius);
+  corners[2] = sf::Vector2f(wall.pos.x + wall.size.x + radius, wall.pos.y + wall.size.y + radius);
+  corners[3] = sf::Vector2f(wall.pos.x + wall.size.x + radius, wall.pos.y - radius);
+}
 
+int wallCollide(sf::Vector2f pos, float radius = 0, sf::Vector2f *oldPos = NULL) {
+  sf::Vector2f corners[4];
+  for (auto wall : walls) {
+    if (pos.x > wall.pos.x - radius && pos.x < wall.pos.x + wall.size.x + radius && 
+        pos.y > wall.pos.y - radius && pos.y < wall.pos.y + wall.size.y + radius) {
+      if (!oldPos) return 1;
+      if (oldPos->x > wall.pos.x - radius && oldPos->x < wall.pos.x + wall.size.x + radius) return 1;
+      if (oldPos->y > wall.pos.y - radius && oldPos->y < wall.pos.y + wall.size.y + radius) return 2;
+    }
+  }
+  return 0;
 }
 
 void resizeBubble(Bubble &bubble) {
@@ -252,17 +268,20 @@ int update(sf::RenderWindow &window, float dt) {
   if (game.state != ST_PLAY) return 0;
 
   // Keypress
+  float r = radius(player.health);
   if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
-    if (!wallCollide(player.body)) {
-      player.pos.y -= PLAYER_SPEED * dt;
-    }
+    player.pos.y -= PLAYER_SPEED * dt;
+    if (wallCollide(player.pos, r)) player.pos.y += PLAYER_SPEED * dt * WALL_PLAYER_BOUNCE;
   } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
     player.pos.y += PLAYER_SPEED * dt;
+    if (wallCollide(player.pos, r)) player.pos.y -= PLAYER_SPEED * dt * WALL_PLAYER_BOUNCE;
   }
   if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
     player.pos.x -= PLAYER_SPEED * dt;
+    if (wallCollide(player.pos, r)) player.pos.x += PLAYER_SPEED * dt * WALL_PLAYER_BOUNCE;
   } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
     player.pos.x += PLAYER_SPEED * dt;
+    if (wallCollide(player.pos, r)) player.pos.x -= PLAYER_SPEED * dt * WALL_PLAYER_BOUNCE;
   }
   game.cooldown[CD_GUN] = (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left)) ? game.cooldown[CD_GUN] - dt : GUN_COOLDOWN;
   if (game.cooldown[CD_GUN] <= 0) {
@@ -307,17 +326,22 @@ int update(sf::RenderWindow &window, float dt) {
   // Velocity-based
   auto bullet = bullets.begin();
   while (bullet != bullets.end()) {
+    bool erased = false;
     bullet->pos.x += BULLET_SPEED * dt * cos(bullet->angle);
     bullet->pos.y += BULLET_SPEED * dt * sin(bullet->angle);
-    sf::Vector2f altPos = bullet->pos - sf::Vector2f(BULLET_ALT * cos(bullet->angle), BULLET_ALT * sin(bullet->angle));
-    bool erased = false;
-    for (auto &bubble : bubbles) {
-      float r = radius(bubble.health);
-      if (vAbs(bubble.pos - bullet->pos) <= r || vAbs(bubble.pos - altPos) <= r) {
-        bubble.health -= BULLET_DAMAGE;
-        resizeBubble(bubble);
-        erased = true;
-        break;
+    if (wallCollide(bullet->pos)) {
+      erased = true;
+    }
+    if (!erased) {
+      sf::Vector2f altPos = bullet->pos - sf::Vector2f(BULLET_ALT * cos(bullet->angle), BULLET_ALT * sin(bullet->angle));
+      for (auto &bubble : bubbles) {
+        float r = radius(bubble.health);
+        if (vAbs(bubble.pos - bullet->pos) <= r || vAbs(bubble.pos - altPos) <= r) {
+          bubble.health -= BULLET_DAMAGE;
+          resizeBubble(bubble);
+          erased = true;
+          break;
+        }
       }
     }
     if (erased || bullet->pos.x < 0 || bullet->pos.x > WIN_W || bullet->pos.y < 0 || bullet->pos.y > WIN_H) {
@@ -393,9 +417,17 @@ int update(sf::RenderWindow &window, float dt) {
       sf::Vector2f dirPos = player.pos - bubble->pos;
       float angle = vAngle(dirPos);
       float s = speed(BUBBLE_SPEED, bubble->health);
+      float r = radius(bubble->health);
+      sf::Vector2f oldPos = bubble->pos;
       bubble->pos.x += s * dt * cos(angle);
       bubble->pos.y += s * dt * sin(angle);
-      if (vAbs(player.pos - bubble->pos) < (radius(player.health) + radius(bubble->health))) {
+      int col = wallCollide(bubble->pos, r, &oldPos);
+      if (col == 1) {
+        bubble->pos.y -= s * dt * sin(angle) * WALL_BUBBLE_BOUNCE;
+      } else if (col == 2) {
+        bubble->pos.x -= s * dt * cos(angle) * WALL_BUBBLE_BOUNCE;
+      }
+      if (vAbs(player.pos - bubble->pos) < (radius(player.health) + r)) {
         bubble->attack -= dt;
         if (bubble->attack <= 0) {
           bubble->attack = BUBBLE_ATTACK;
@@ -562,9 +594,10 @@ int main() {
     int response = update(window, dt);
     switch (response) {
       case -1:
-        std::cout << "Game over! You killed " << player.killed << " bubbles." << std::endl;
-        restart();
-        game.state = ST_INIT;
+        game.state = ST_END;
+        char msg[254];
+        snprintf(msg, 254, "Game over! You killed %d bubbles in %d waves. Press Z to restart.", player.killed, game.wave, player.cash);
+        displaySplash(msg, 0.1);
         break;
       case 1:
         setTextBoxes();

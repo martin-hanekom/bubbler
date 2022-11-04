@@ -62,10 +62,13 @@
 #define WALL_BASE 20
 #define WALL_MIN 100
 #define WALL_MAX 230
+#define WALL_PLAYER_BOUNCE 5
+#define WALL_BUBBLE_BOUNCE 15
 
 #define ST_INIT 0
 #define ST_PLAY 1
 #define ST_PAUSE 2
+#define ST_END 3
 
 #define NUM_CD 3
 #define CD_BUBBLE 0
