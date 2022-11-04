@@ -3,8 +3,8 @@
 
 #include <string>
 
-#define WIN_W 1600
-#define WIN_H 900
+#define WIN_W 1300
+#define WIN_H 700
 #define FS 60
 
 #define HEALTH_DIV 10

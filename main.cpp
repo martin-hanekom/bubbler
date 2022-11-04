@@ -596,7 +596,7 @@ int main() {
       case -1:
         game.state = ST_END;
         char msg[254];
-        snprintf(msg, 254, "Game over! You killed %d bubbles in %d waves. Press Z to restart.", player.killed, game.wave, player.cash);
+        snprintf(msg, 254, "Game over! You killed %d bubbles in %d waves. Press Z to restart.", player.killed, game.wave);
         displaySplash(msg, 0.1);
         break;
       case 1:
