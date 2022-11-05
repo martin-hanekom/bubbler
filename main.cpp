@@ -6,6 +6,7 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include "main.hpp"
+#include "bubble.hpp"
 
 // global variables
 Game game;
@@ -179,6 +180,7 @@ void createWalls() {
     }
     walls[i].body.setPosition(walls[i].pos);
     walls[i].body.setSize(walls[i].size);
+    walls[i].body.setFillColor(sf::Color(WALL_COLOR[0], WALL_COLOR[1], WALL_COLOR[2]));
     //walls[i].body.setOrigin(walls[i].size.x / 2, walls[i].size.y / 2);
   }
 }
@@ -264,10 +266,8 @@ void shootGrenade(sf::Vector2f mousePos) {
   }
 }
 
-int update(sf::RenderWindow &window, float dt) {
-  if (game.state != ST_PLAY) return 0;
-
-  // Keypress
+bool updatePlayer(sf::RenderWindow &window, float dt) {
+  bool setUi = false;
   float r = radius(player.health);
   if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
     player.pos.y -= PLAYER_SPEED * dt;
@@ -290,48 +290,16 @@ int update(sf::RenderWindow &window, float dt) {
   }
   player.body.setPosition(player.pos);
   gun.body.setPosition(player.pos);
-  game.splash = (game.splash > 0) ? game.splash - dt : 0;
+  return setUi;
+}
 
-  auto package = packages.begin();
-  float playerRadius = radius(player.health);
+bool updateBullets(sf::RenderWindow &window, float dt) {
   bool setUi = false;
-  while (package != packages.end()) {
-    package->alpha -= dt * PACKAGE_FADE;
-    package->body.setFillColor(sf::Color(PACKAGE_COLOR[0], PACKAGE_COLOR[1], PACKAGE_COLOR[2], ceil(package->alpha)));
-    if (vAbs(player.pos - package->pos) <= playerRadius + PACKAGE_RADIUS) {
-      player.health += package->health;
-      resizePlayer();
-      package = packages.erase(package);
-      setUi = true;
-      sounds[SOUND_HEAL].play();
-    } else if (package->alpha <= 0) {
-      package = packages.erase(package);
-    } else {
-      package++;
-    }
-  }
-
-  // Cooldown
-  if (game.numSpawned < game.numBubbles) {
-    game.cooldown[CD_BUBBLE] -= dt;
-    if (game.cooldown[CD_BUBBLE] <= 0) {
-      Bubble bubble;
-      createBubble(bubble);
-      bubbles.push_back(bubble);
-      game.numSpawned++;
-      game.cooldown[CD_BUBBLE] = bubbleCooldown();
-    }
-  }
-
-  // Velocity-based
   auto bullet = bullets.begin();
   while (bullet != bullets.end()) {
-    bool erased = false;
     bullet->pos.x += BULLET_SPEED * dt * cos(bullet->angle);
     bullet->pos.y += BULLET_SPEED * dt * sin(bullet->angle);
-    if (wallCollide(bullet->pos)) {
-      erased = true;
-    }
+    bool erased = wallCollide(bullet->pos);
     if (!erased) {
       sf::Vector2f altPos = bullet->pos - sf::Vector2f(BULLET_ALT * cos(bullet->angle), BULLET_ALT * sin(bullet->angle));
       for (auto &bubble : bubbles) {
@@ -351,19 +319,25 @@ int update(sf::RenderWindow &window, float dt) {
       bullet++;
     }
   }
+  return setUi;
+}
 
+bool updateGrenades(sf::RenderWindow &window, float dt) {
+  bool setUi = false;
   auto grenade = grenades.begin();
   while (grenade != grenades.end()) {
     grenade->pos.x += GRENADE_SPEED * dt * cos(grenade->angle);
     grenade->pos.y += GRENADE_SPEED * dt * sin(grenade->angle);
-    bool erased = false;
-    for (auto &bubble : bubbles) {
-      if (vAbs(bubble.pos - grenade->pos) <= radius(bubble.health) + GRENADE_RADIUS) {
-        erased = true;
-        break;
+    bool erased = wallCollide(grenade->pos);
+    if (!erased) {
+      for (auto &bubble : bubbles) {
+        if (vAbs(bubble.pos - grenade->pos) <= radius(bubble.health) + GRENADE_RADIUS) {
+          erased = true;
+          break;
+        }
       }
     }
-    if (erased) {
+    if (erased || grenade->pos.x < 0 || grenade->pos.y > WIN_W || grenade->pos.y < 0 || grenade->pos.y > WIN_H) {
       Blast blast;
       createBlast(blast, grenade->pos);
       blasts.push_back(blast);
@@ -374,8 +348,6 @@ int update(sf::RenderWindow &window, float dt) {
         }
       }
       sounds[SOUND_BLAST].play();
-    }
-    if (erased || grenade->pos.x < 0 || grenade->pos.y > WIN_W || grenade->pos.y < 0 || grenade->pos.y > WIN_H) {
       grenade = grenades.erase(grenade);
     } else {
       grenade->body.setPosition(grenade->pos);
@@ -392,7 +364,43 @@ int update(sf::RenderWindow &window, float dt) {
       blast++;
     }
   }
+  return setUi;
+}
 
+bool updatePackages(sf::RenderWindow &window, float dt) {
+  bool setUi = false;
+  auto package = packages.begin();
+  float playerRadius = radius(player.health);
+  while (package != packages.end()) {
+    package->alpha -= dt * PACKAGE_FADE;
+    package->body.setFillColor(sf::Color(PACKAGE_COLOR[0], PACKAGE_COLOR[1], PACKAGE_COLOR[2], ceil(package->alpha)));
+    if (vAbs(player.pos - package->pos) <= playerRadius + PACKAGE_RADIUS) {
+      player.health += package->health;
+      resizePlayer();
+      package = packages.erase(package);
+      setUi = true;
+      sounds[SOUND_HEAL].play();
+    } else if (package->alpha <= 0) {
+      package = packages.erase(package);
+    } else {
+      package++;
+    }
+  }
+  return setUi;
+}
+
+bool updateBubbles(sf::RenderWindow &window, float dt) {
+  bool setUi = false;
+  if (game.numSpawned < game.numBubbles) {
+    game.cooldown[CD_BUBBLE] -= dt;
+    if (game.cooldown[CD_BUBBLE] <= 0) {
+      Bubble bubble;
+      createBubble(bubble);
+      bubbles.push_back(bubble);
+      game.numSpawned++;
+      game.cooldown[CD_BUBBLE] = bubbleCooldown();
+    }
+  }
   std::vector<Bubble> newBubbles;
   auto bubble = bubbles.begin();
   while (bubble != bubbles.end()) {
@@ -447,11 +455,19 @@ int update(sf::RenderWindow &window, float dt) {
   if (newBubbles.size()) {
     bubbles.insert(bubbles.end(), newBubbles.begin(), newBubbles.end());
   }
+  return setUi;
+}
 
-  if (game.numBubbles == game.numSpawned && bubbles.size() == 0) {
-    nextRound();
-  }
-
+int update(sf::RenderWindow &window, float dt) {
+  if (game.state != ST_PLAY) return 0;
+  game.splash = (game.splash > 0) ? game.splash - dt : 0;
+  bool setUi = false;
+  setUi |= updatePlayer(window, dt);
+  setUi |= updatePackages(window, dt);
+  setUi |= updateBullets(window, dt);
+  setUi |= updateGrenades(window, dt);
+  setUi |= updateBubbles(window, dt);
+  if (game.numBubbles == game.numSpawned && bubbles.size() == 0) nextRound();
   if (player.health < 0) return -1;
   if (setUi) return 1;
   return 0;
